@@ -72,10 +72,10 @@ class network():
         self.layer01_size = (9, 8)
         self.layer02_size = (8, 1)
 
-        self.weight01 = np.random.rand(*self.layer01_size) * 0.1
-        self.bias01 = np.random.rand(self.layer01_size[1]) * 0.01
-        self.weight02 = np.random.rand(*self.layer02_size) * 0.1
-        self.bias02 = np.random.rand(self.layer02_size[1]) * 0.01
+        self.weight01 = np.random.rand(*self.layer01_size) 
+        self.bias01 = np.random.rand(self.layer01_size[1]) 
+        self.weight02 = np.random.rand(*self.layer02_size) 
+        self.bias02 = np.random.rand(self.layer02_size[1]) 
 
         self.input = input
 
@@ -162,9 +162,9 @@ class turtle_node(Node):
         self.total_route = 0
         self.total_node = -1
         self.start_time = time.time()
-        self.lap_start_time = time.time()
         self.training_data = []
         self.havePrint = False
+        self.haveStart = False
 
         self.create_timer(0.1, self.mainloop)
         self.get_logger().info("Start turtle main loop")
@@ -233,9 +233,15 @@ class turtle_node(Node):
             self.param.update_params(best_params)
 
     def mainloop(self):
+        if self.total_node == 0 and not self.haveStart:
+            self.haveStart = True
+            self.lap_start_time = time.time()
+            
         if self.total_node > 0 and self.total_node % 4 == 0 and not self.havePrint:
             self.havePrint = True
             lap_time = time.time() - self.lap_start_time
+            self.lap_start_time = time.time()
+
             self.get_logger().info(f"完成一圈，用时: {lap_time:.2f}秒")
             self.training_data.append((self.param.current_paramList.copy(), lap_time))
             
@@ -244,8 +250,6 @@ class turtle_node(Node):
                 avg_loss = self.brain.train_network(self.training_data, self.get_logger())
                 self.get_logger().info("=== 参数优化 ===")
                 self.optimize_parameters()
-
-            self.lap_start_time = time.time()
         if self.total_node % 4 != 0:
             self.havePrint = False
 
