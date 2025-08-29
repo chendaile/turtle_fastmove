@@ -147,6 +147,7 @@ class turtle_node(Node):
         self.start_time = time.time()
         self.lap_start_time = time.time()
         self.training_data = []
+        self.lap_completed = False  # 添加标志变量
 
         self.create_timer(0.1, self.mainloop)
         self.get_logger().info("Start turtle main loop")
@@ -175,6 +176,9 @@ class turtle_node(Node):
 
         self.pos = pose
         self.total_time = time.time() - self.start_time
+
+        if self.total_node % 4 == 0:
+            self.lap_completed = True
         
     def send_cmd(self, v, w):
         msg = Twist()
@@ -209,7 +213,7 @@ class turtle_node(Node):
         return v, w
 
     def mainloop(self):
-        if self.total_node > 0 and self.total_node % 4 == 0:
+        if self.total_node > 0 and self.lap_completed:
             lap_time = time.time() - self.lap_start_time
             self.training_data.append((self.param.current_paramList.copy(), lap_time))
             
@@ -219,6 +223,8 @@ class turtle_node(Node):
             
             self.lap_start_time = time.time()
             self.print_status()
+
+            self.lap_completed = False
 
         if hasattr(self, 'distance'):
             v, m = self.get_best_cmd(self.distance, self.angle_diff)
