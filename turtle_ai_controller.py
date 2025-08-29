@@ -43,7 +43,21 @@ class optimized_para():
 
         self.current_paramList = np.array(list(self.params.values()))
 
+    # def update_params(self, param_updates):
+    #     if isinstance(param_updates, dict):    
+    #         for param_name, update in param_updates.items():
+    #             min_val, max_val = self.params_range[param_name]
+    #             self.params[param_name] = np.clip(update, min_val, max_val)
+    #     elif isinstance(param_updates, np.ndarray):
+    #         for i, param_name in enumerate(self.params.keys()):
+    #             min_val, max_val = self.params_range[param_name]
+    #             self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
+
+    #     self.current_paramList = np.array(list(self.params.values()))
+
     def update_params(self, param_updates):
+        old_params = self.params.copy()  # 保存旧参数
+        
         if isinstance(param_updates, dict):    
             for param_name, update in param_updates.items():
                 min_val, max_val = self.params_range[param_name]
@@ -54,6 +68,8 @@ class optimized_para():
                 self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
 
         self.current_paramList = np.array(list(self.params.values()))
+        
+        return old_params  # 返回旧参数用于日志
 
     def generate_candidate_params(self):
         current = self.current_paramList
@@ -69,17 +85,27 @@ class optimized_para():
 
 class network():
     def __init__(self):
-        self.layer01_size = (9, 8)
-        self.layer02_size = (8, 1)
+        # 改进网络结构：9 -> 16 -> 12 -> 8 -> 1 (增加层数和宽度)
+        self.input_size = 9
+        self.hidden1_size = 16
+        self.hidden2_size = 12  
+        self.hidden3_size = 8
+        self.output_size = 1
 
-        self.weight01 = np.random.rand(*self.layer01_size) 
-        self.bias01 = np.random.rand(self.layer01_size[1]) 
-        self.weight02 = np.random.rand(*self.layer02_size) 
-        self.bias02 = np.random.rand(self.layer02_size[1]) 
+        # 使用Xavier初始化，比随机初始化更好
+        self.w1 = np.random.randn(self.input_size, self.hidden1_size) * np.sqrt(2.0/self.input_size)
+        self.b1 = np.zeros(self.hidden1_size)
+        
+        self.w2 = np.random.randn(self.hidden1_size, self.hidden2_size) * np.sqrt(2.0/self.hidden1_size)
+        self.b2 = np.zeros(self.hidden2_size)
+        
+        self.w3 = np.random.randn(self.hidden2_size, self.hidden3_size) * np.sqrt(2.0/self.hidden2_size)
+        self.b3 = np.zeros(self.hidden3_size)
+        
+        self.w4 = np.random.randn(self.hidden3_size, self.output_size) * np.sqrt(2.0/self.hidden3_size)
+        self.b4 = np.zeros(self.output_size)
 
-        self.input = input
-
-        self.learning_rate = 0.001
+        self.learning_rate = 0.01  # 提高学习率
 
     def relu(self, x):
         return np.maximum(0, x)
@@ -87,34 +113,56 @@ class network():
     def relu_derivative(self, x):
         return (x > 0).astype(float)
     
-    def tanh(self, x):
-        return np.tanh(x)
-    
-    def tanh_derivative(self, x):
-        return 1 - np.tanh(x)**2
-    
     def forward(self, input_data: np.ndarray):
         self.input_data = input_data
-        self.z1 = input_data @ self.weight01 + self.bias01
+        
+        # 层1
+        self.z1 = input_data @ self.w1 + self.b1
         self.a1 = self.relu(self.z1)
+        
+        # 层2  
+        self.z2 = self.a1 @ self.w2 + self.b2
+        self.a2 = self.relu(self.z2)
+        
+        # 层3
+        self.z3 = self.a2 @ self.w3 + self.b3
+        self.a3 = self.relu(self.z3)
+        
+        # 输出层(不用激活函数，因为时间可以是任何正值)
+        self.z4 = self.a3 @ self.w4 + self.b4
+        self.output = self.z4  # 直接线性输出
 
-        self.z2 = self.a1 @ self.weight02 + self.bias02
-        self.a2 = self.tanh(self.z2)
-
-        return self.a2
+        return self.output
     
     def backward(self, target_output: np.ndarray):
-        output_error = self.a2 - target_output
-        delta2 = output_error * self.tanh_derivative(self.z2)
+        # 输出层误差
+        output_error = self.output - target_output
+        delta4 = output_error  # 线性输出，导数为1
         
-        error1 = delta2 @ self.weight02.T
+        # 第3层误差
+        error3 = delta4 @ self.w4.T
+        delta3 = error3 * self.relu_derivative(self.z3)
+        
+        # 第2层误差
+        error2 = delta3 @ self.w3.T
+        delta2 = error2 * self.relu_derivative(self.z2)
+        
+        # 第1层误差
+        error1 = delta2 @ self.w2.T
         delta1 = error1 * self.relu_derivative(self.z1)
         
-        self.weight02 -= self.learning_rate * np.outer(self.a1, delta2)
-        self.bias02 -= self.learning_rate * delta2
+        # 更新所有权重和偏置
+        self.w4 -= self.learning_rate * np.outer(self.a3, delta4)
+        self.b4 -= self.learning_rate * delta4
         
-        self.weight01 -= self.learning_rate * np.outer(self.input_data, delta1)
-        self.bias01 -= self.learning_rate * delta1
+        self.w3 -= self.learning_rate * np.outer(self.a2, delta3)
+        self.b3 -= self.learning_rate * delta3
+        
+        self.w2 -= self.learning_rate * np.outer(self.a1, delta2)
+        self.b2 -= self.learning_rate * delta2
+        
+        self.w1 -= self.learning_rate * np.outer(self.input_data, delta1)
+        self.b1 -= self.learning_rate * delta1
 
         loss = float(output_error[0] ** 2)
         return loss
@@ -217,11 +265,26 @@ class turtle_node(Node):
 
         return v, w
 
+    # def optimize_parameters(self):
+    #     best_params = None
+    #     best_predicted_time = float('inf')
+        
+    #     for _ in range(10): 
+    #         candidate_params = self.param.generate_candidate_params()
+    #         predicted_time = self.brain.forward(candidate_params)[0]
+            
+    #         if predicted_time < best_predicted_time:
+    #             best_predicted_time = predicted_time
+    #             best_params = candidate_params
+        
+    #     if best_params is not None:
+    #         self.param.update_params(best_params)
+
     def optimize_parameters(self):
         best_params = None
         best_predicted_time = float('inf')
         
-        for _ in range(10): 
+        for i in range(10): 
             candidate_params = self.param.generate_candidate_params()
             predicted_time = self.brain.forward(candidate_params)[0]
             
@@ -230,7 +293,26 @@ class turtle_node(Node):
                 best_params = candidate_params
         
         if best_params is not None:
-            self.param.update_params(best_params)
+            # 更新参数并获取旧参数
+            old_params = self.param.update_params(best_params)
+            
+            self.get_logger().info(f"优化完成! 预测改进时间: {best_predicted_time:.2f}秒")
+            
+            # 显示参数变化
+            param_names = list(self.param.params.keys())
+            self.get_logger().info("参数变化详情:")
+            
+            for name in param_names:
+                old_val = old_params[name]
+                new_val = self.param.params[name]
+                change = new_val - old_val
+                change_pct = (change / old_val * 100) if old_val != 0 else 0
+                
+                if abs(change) > 0.01:  # 只显示变化较大的参数
+                    self.get_logger().info(f"  {name}: {old_val:.3f} → {new_val:.3f} "
+                                        f"(变化: {change:+.3f}, {change_pct:+.1f}%)")
+        else:
+            self.get_logger().info("未找到更好的参数组合")
 
     def mainloop(self):
         if self.total_node == 0 and not self.haveStart:
