@@ -41,6 +41,8 @@ class optimized_para():
             'slow_factor': (0.1, 3),              
         }
 
+        self.current_paramList = np.array(list(self.params.values()))
+
     def update_params(self, param_updates):
         for param_name, update in param_updates.items():
             if param_name in self.params:
@@ -48,6 +50,18 @@ class optimized_para():
                 # 限制在边界内
                 min_val, max_val = self.param_bounds[param_name]
                 self.params[param_name] = np.clip(new_value, min_val, max_val)
+
+    def generate_candidate_params(self):
+        current = self.current_paramList
+        noise = np.random.normal(0, 0.1, size=current.shape)
+        candidate = current + noise
+        
+        param_names = list(self.param.params.keys())
+        for i, name in enumerate(param_names):
+            min_val, max_val = self.params_range[name]
+            candidate[i] = np.clip(candidate[i], min_val, max_val)
+                
+        return candidate
 
 class network():
     def __init__(self):
@@ -97,10 +111,11 @@ class network():
         self.weight01 -= self.learning_rate * np.outer(self.a1, delta1)
         self.bias01 -= self.learning_rate * delta1
 
-    def train(self, input, target_output):
-        self.forward(input)
-        self.backward(target_output)
-
+    def train_network(self, data):
+        for params, lap_time in data[-5:]:  # 使用最近5次数据
+            self.forward(params)
+            self.backward(np.array(list(lap_time)))
+    
 class turtle_node(Node):
     def __init__(self):
         super().__init__('turtle1')
@@ -193,12 +208,10 @@ class turtle_node(Node):
     def mainloop(self):
         if self.total_node > 0 and self.total_node % 4 == 0:
             lap_time = time.time() - self.lap_start_time
-            current_params = np.array(list(self.param.params.values()))
-            
-            self.training_data.append((current_params.copy(), lap_time))
+            self.training_data.append((self.param.current_paramList.copy(), lap_time))
             
             if len(self.training_data) > 5:
-                self.train_network()
+                self.brain.train_network(self.training_data)
                 self.optimize_parameters() 
             
             self.lap_start_time = time.time()
@@ -206,19 +219,14 @@ class turtle_node(Node):
 
         v, m = self.get_best_cmd(self.distance, self.angle_diff)
         self.send_cmd(v, m)
-    
-    def train_network(self):
-        for params, lap_time in self.training_data[-5:]:  # 使用最近5次数据
-            self.brain.train(params, np.array([lap_time]))
-    
+
     def optimize_parameters(self):
         best_params = None
         best_predicted_time = float('inf')
         
-        # 在参数空间中搜索
         for _ in range(10):  # 尝试10个随机参数组合
             # 在当前参数附近生成候选参数
-            candidate_params = self.generate_candidate_params()
+            candidate_params = self.param.generate_candidate_params()
             predicted_time = self.brain.forward(candidate_params)[0]
             
             if predicted_time < best_predicted_time:
@@ -226,23 +234,8 @@ class turtle_node(Node):
                 best_params = candidate_params
         
         if best_params is not None:
-            self.update_params_gradually(best_params)
+            self.param.update_params(best_params)
     
-    def generate_candidate_params(self):
-        current = np.array(list(self.param.params.values()))
-        # 添加小的随机扰动
-        noise = np.random.normal(0, 0.1, size=current.shape)
-        candidate = current + noise
-        
-        # 确保在合理范围内
-        param_names = list(self.param.params.keys())
-        for i, name in enumerate(param_names):
-            min_val, max_val = self.param.params_range[name]
-            candidate[i] = np.clip(candidate[i], min_val, max_val)
-            
-        return candidate
-
-
 def main():
     rclpy.init()
     turtlesim = turtle_node()
