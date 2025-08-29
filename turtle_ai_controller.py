@@ -5,6 +5,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from turtlesim.msg import Pose
 import numpy as np
+import json
 
 class optimized_para():
     def __init__(self):
@@ -43,18 +44,25 @@ class optimized_para():
 
         self.current_paramList = np.array(list(self.params.values()))
 
-    # def update_params(self, param_updates):
-    #     if isinstance(param_updates, dict):    
-    #         for param_name, update in param_updates.items():
-    #             min_val, max_val = self.params_range[param_name]
-    #             self.params[param_name] = np.clip(update, min_val, max_val)
-    #     elif isinstance(param_updates, np.ndarray):
-    #         for i, param_name in enumerate(self.params.keys()):
-    #             min_val, max_val = self.params_range[param_name]
-    #             self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
-
-    #     self.current_paramList = np.array(list(self.params.values()))
-
+    def save_best_params(self, lap_time):
+        save_data = {
+            'best_time': lap_time,
+            'best_params': self.params.copy()
+        }
+    
+        try:
+            with open('best_params.json', 'r') as f:
+                old_data = json.load(f)
+            if lap_time >= old_data['best_time']:
+                return False  # 不是更好的成绩
+        except:
+            pass  # 文件不存在或读取失败，继续保存
+        
+        with open('best_params.json', 'w') as f:
+            json.dump(save_data, f, indent=2)
+        
+        return True 
+    
     def update_params(self, param_updates):
         old_params = self.params.copy()  # 保存旧参数
         
@@ -264,22 +272,7 @@ class turtle_node(Node):
             v *= self.param.params['slow_factor']
 
         return v, w
-
-    # def optimize_parameters(self):
-    #     best_params = None
-    #     best_predicted_time = float('inf')
-        
-    #     for _ in range(10): 
-    #         candidate_params = self.param.generate_candidate_params()
-    #         predicted_time = self.brain.forward(candidate_params)[0]
-            
-    #         if predicted_time < best_predicted_time:
-    #             best_predicted_time = predicted_time
-    #             best_params = candidate_params
-        
-    #     if best_params is not None:
-    #         self.param.update_params(best_params)
-
+    
     def optimize_parameters(self):
         best_params = None
         best_predicted_time = float('inf')
@@ -338,7 +331,13 @@ class turtle_node(Node):
         if hasattr(self, 'distance'):
             v, m = self.get_best_cmd(self.distance, self.angle_diff)
             self.send_cmd(v, m)
-    
+
+        try:
+            if self.param.save_best_params(lap_time):
+                self.get_logger().info("🎉 新最佳成绩已保存!")
+        except:
+            pass
+        
 def main():
     rclpy.init()
     turtlesim = turtle_node()
