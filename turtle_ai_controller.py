@@ -54,9 +54,9 @@ class optimized_para():
             with open('best_params.json', 'r') as f:
                 old_data = json.load(f)
             if lap_time >= old_data['best_time']:
-                return False  # 不是更好的成绩
+                return False 
         except:
-            pass  # 文件不存在或读取失败，继续保存
+            pass
         
         with open('best_params.json', 'w') as f:
             json.dump(save_data, f, indent=2)
@@ -64,7 +64,7 @@ class optimized_para():
         return True 
     
     def update_params(self, param_updates):
-        old_params = self.params.copy()  # 保存旧参数
+        old_params = self.params.copy()
         
         if isinstance(param_updates, dict):    
             for param_name, update in param_updates.items():
@@ -77,7 +77,7 @@ class optimized_para():
 
         self.current_paramList = np.array(list(self.params.values()))
         
-        return old_params  # 返回旧参数用于日志
+        return old_params 
 
     def generate_candidate_params(self):
         current = self.current_paramList
@@ -113,7 +113,7 @@ class network():
         self.w4 = np.random.randn(self.hidden3_size, self.output_size) * np.sqrt(2.0/self.hidden3_size)
         self.b4 = np.zeros(self.output_size)
 
-        self.learning_rate = 0.01  # 提高学习率
+        self.learning_rate = 0.01
 
     def relu(self, x):
         return np.maximum(0, x)
@@ -124,19 +124,15 @@ class network():
     def forward(self, input_data: np.ndarray):
         self.input_data = input_data
         
-        # 层1
         self.z1 = input_data @ self.w1 + self.b1
         self.a1 = self.relu(self.z1)
         
-        # 层2  
         self.z2 = self.a1 @ self.w2 + self.b2
         self.a2 = self.relu(self.z2)
         
-        # 层3
         self.z3 = self.a2 @ self.w3 + self.b3
         self.a3 = self.relu(self.z3)
         
-        # 输出层(不用激活函数，因为时间可以是任何正值)
         self.z4 = self.a3 @ self.w4 + self.b4
         self.output = self.z4  # 直接线性输出
 
@@ -147,19 +143,15 @@ class network():
         output_error = self.output - target_output
         delta4 = output_error  # 线性输出，导数为1
         
-        # 第3层误差
         error3 = delta4 @ self.w4.T
         delta3 = error3 * self.relu_derivative(self.z3)
         
-        # 第2层误差
         error2 = delta3 @ self.w3.T
         delta2 = error2 * self.relu_derivative(self.z2)
         
-        # 第1层误差
         error1 = delta2 @ self.w2.T
         delta1 = error1 * self.relu_derivative(self.z1)
         
-        # 更新所有权重和偏置
         self.w4 -= self.learning_rate * np.outer(self.a3, delta4)
         self.b4 -= self.learning_rate * delta4
         
@@ -181,16 +173,17 @@ class network():
         
         for params, lap_time in data[-5:]:
             predicted = self.forward(params)
-            loss = self.backward(np.array([lap_time]))
+            # loss = self.backward(np.array([lap_time]))
+            loss = abs(predicted[0]-lap_time)
             total_loss += loss
             sample_count += 1
             
             if logger:
-                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
+                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{loss:.1f}s")
         
         avg_loss = total_loss / sample_count if sample_count > 0 else 0
         if logger:
-            logger.info(f"平均训练损失: {avg_loss:.3f}")
+            logger.info(f"平均训练损失: {avg_loss:.1f}s")
         
         return avg_loss
     
@@ -286,12 +279,10 @@ class turtle_node(Node):
                 best_params = candidate_params
         
         if best_params is not None:
-            # 更新参数并获取旧参数
             old_params = self.param.update_params(best_params)
             
             self.get_logger().info(f"优化完成! 预测改进时间: {best_predicted_time:.2f}秒")
             
-            # 显示参数变化
             param_names = list(self.param.params.keys())
             self.get_logger().info("参数变化详情:")
             
@@ -301,7 +292,7 @@ class turtle_node(Node):
                 change = new_val - old_val
                 change_pct = (change / old_val * 100) if old_val != 0 else 0
                 
-                if abs(change) > 0.01:  # 只显示变化较大的参数
+                if abs(change) > 0.01: 
                     self.get_logger().info(f"  {name}: {old_val:.3f} → {new_val:.3f} "
                                         f"(变化: {change:+.3f}, {change_pct:+.1f}%)")
         else:
@@ -337,7 +328,7 @@ class turtle_node(Node):
                 self.get_logger().info("🎉 新最佳成绩已保存!")
         except:
             pass
-        
+
 def main():
     rclpy.init()
     turtlesim = turtle_node()
