@@ -53,12 +53,14 @@ class optimized_para():
                 min_val, max_val = self.params_range[param_name]
                 self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
 
+        self.current_paramList = np.array(list(self.params.values()))
+
     def generate_candidate_params(self):
         current = self.current_paramList
         noise = np.random.normal(0, 0.1, size=current.shape)
         candidate = current + noise
         
-        param_names = list(self.param.params.keys())
+        param_names = list(self.params.keys())
         for i, name in enumerate(param_names):
             min_val, max_val = self.params_range[name]
             candidate[i] = np.clip(candidate[i], min_val, max_val)
@@ -70,14 +72,14 @@ class network():
         self.layer01_size = (9, 8)
         self.layer02_size = (8, 1)
 
-        self.weight01 = np.random.rand(*self.layer01_size)
-        self.bias01 = np.random.rand(self.layer01_size[1])
-        self.weight02 = np.random.rand(*self.layer02_size)
-        self.bias02 = np.random.rand(self.layer02_size[1])
+        self.weight01 = np.random.rand(*self.layer01_size) * 0.1
+        self.bias01 = np.random.rand(self.layer01_size[1]) * 0.01
+        self.weight02 = np.random.rand(*self.layer02_size) * 0.1
+        self.bias02 = np.random.rand(self.layer02_size[1]) * 0.01
 
         self.input = input
 
-        self.learning_rate = 0.0001
+        self.learning_rate = 0.001
 
     def relu(self, x):
         return np.maximum(0, x)
@@ -91,8 +93,9 @@ class network():
     def tanh_derivative(self, x):
         return 1 - np.tanh(x)**2
     
-    def forward(self, input: np.ndarray):
-        self.z1 = input @ self.weight01 + self.bias01
+    def forward(self, input_data: np.ndarray):
+        self.input_data = input_data
+        self.z1 = input_data @ self.weight01 + self.bias01
         self.a1 = self.relu(self.z1)
 
         self.z2 = self.a1 @ self.weight02 + self.bias02
@@ -104,19 +107,19 @@ class network():
         output_error = self.a2 - target_output
         delta2 = output_error * self.tanh_derivative(self.z2)
         
-        error1 = delta2 @ self.w2.T
+        error1 = delta2 @ self.weight02.T
         delta1 = error1 * self.relu_derivative(self.z1)
         
-        self.weight02 -= self.learning_rate * np.outer(self.a2, delta2)
+        self.weight02 -= self.learning_rate * np.outer(self.a1, delta2)
         self.bias02 -= self.learning_rate * delta2
         
-        self.weight01 -= self.learning_rate * np.outer(self.a1, delta1)
+        self.weight01 -= self.learning_rate * np.outer(self.input_data, delta1)
         self.bias01 -= self.learning_rate * delta1
 
     def train_network(self, data):
         for params, lap_time in data[-5:]:  # 使用最近5次数据
             self.forward(params)
-            self.backward(np.array(list(lap_time)))
+            self.backward(np.array([lap_time]))
     
 class turtle_node(Node):
     def __init__(self):
@@ -132,16 +135,16 @@ class turtle_node(Node):
             Twist, '/turtle1/cmd_vel', 10
         )
 
-        self.duty = {1:(2, 2), 
-                     2:(9, 2), 
-                     3:(9, 9), 
-                     4:(2, 9)}
+        self.duty = {0:(2, 2), 
+                     1:(9, 2), 
+                     2:(9, 9), 
+                     3:(2, 9)}
         self.duty_index = 0
 
         self.distance_thres = 0.3
         self.total_route = 0
         self.total_node = 0
-        self.time_tmp = 0
+        self.start_time = time.time()
         self.lap_start_time = time.time()
         self.training_data = []
 
@@ -154,7 +157,7 @@ class turtle_node(Node):
             self.total_route += add_route
 
         self.des_point_pos = self.duty[self.duty_index]
-        gap_x, gap_y = pose.x - self.des_point_pos[0], pose.y - self.des_point_pos[1]
+        gap_x, gap_y = self.des_point_pos[0] - pose.x, self.des_point_pos[1] - pose.y 
         self.distance = sqrt(gap_x**2 + gap_y**2)
 
         self.gap_theta = atan2(gap_y, gap_x)
@@ -175,17 +178,15 @@ class turtle_node(Node):
         
     def send_cmd(self, v, w):
         msg = Twist()
-        msg.linear.x = v
-        msg.angular.z = w
+        msg.linear.x = float(v)
+        msg.angular.z = float(w)
         self.cmd_sender.publish(msg)
     
     def print_status(self):
         self.get_logger().info(f"Total route: {self.total_route}")
         self.get_logger().info(f"Total time: {self.total_time}")
-        self.get_logger().info(f"Average velocity: {self.total_route / self.total_time}")
+        self.get_logger().info(f"Average total velocity: {self.total_route / self.total_time}")
         self.get_logger().info(f"Have run {self.total_node} nodes")
-        self.get_logger().info(f"Now at ({self.pos.x:.1f}, {self.pos.y:.1f})")
-        self.get_logger().info(f"Target at {self.des_point_pos}")
 
     def get_best_cmd(self, distance, angle_diff):
         #Get best v and w ... using self.param.params
@@ -219,15 +220,15 @@ class turtle_node(Node):
             self.lap_start_time = time.time()
             self.print_status()
 
-        v, m = self.get_best_cmd(self.distance, self.angle_diff)
-        self.send_cmd(v, m)
+        if hasattr(self, 'distance'):
+            v, m = self.get_best_cmd(self.distance, self.angle_diff)
+            self.send_cmd(v, m)
 
     def optimize_parameters(self):
         best_params = None
         best_predicted_time = float('inf')
         
-        for _ in range(10):  # 尝试10个随机参数组合
-            # 在当前参数附近生成候选参数
+        for _ in range(10): 
             candidate_params = self.param.generate_candidate_params()
             predicted_time = self.brain.forward(candidate_params)[0]
             
