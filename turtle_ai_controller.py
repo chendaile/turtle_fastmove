@@ -116,10 +116,27 @@ class network():
         self.weight01 -= self.learning_rate * np.outer(self.input_data, delta1)
         self.bias01 -= self.learning_rate * delta1
 
-    def train_network(self, data):
-        for params, lap_time in data[-5:]:  # 使用最近5次数据
-            self.forward(params)
-            self.backward(np.array([lap_time]))
+        loss = float(output_error[0] ** 2)
+        return loss
+
+    def train_network(self, data, logger=None):
+        total_loss = 0
+        sample_count = 0
+        
+        for params, lap_time in data[-5:]:
+            predicted = self.forward(params)
+            loss = self.backward(np.array([lap_time]))
+            total_loss += loss
+            sample_count += 1
+            
+            if logger:
+                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
+        
+        avg_loss = total_loss / sample_count if sample_count > 0 else 0
+        if logger:
+            logger.info(f"平均训练损失: {avg_loss:.3f}")
+        
+        return avg_loss
     
 class turtle_node(Node):
     def __init__(self):
@@ -170,7 +187,7 @@ class turtle_node(Node):
         self.angle_diff = angle_diff
 
         if self.distance < self.distance_thres:
-            self.get_logger().info(f"Successfully reach {self.des_point_pos}")
+            # self.get_logger().info(f"Successfully reach {self.des_point_pos}")
             self.duty_index = (self.duty_index + 1) % len(self.duty)
             self.total_node += 1
 
@@ -183,11 +200,11 @@ class turtle_node(Node):
         msg.angular.z = float(w)
         self.cmd_sender.publish(msg)
     
-    def print_status(self):
-        self.get_logger().info(f"Total route: {self.total_route}")
-        self.get_logger().info(f"Total time: {self.total_time}")
-        self.get_logger().info(f"Average total velocity: {self.total_route / self.total_time}")
-        self.get_logger().info(f"Have run {self.total_node} nodes")
+    # def print_status(self):
+    #     self.get_logger().info(f"Total route: {self.total_route}")
+    #     self.get_logger().info(f"Total time: {self.total_time}")
+    #     self.get_logger().info(f"Average total velocity: {self.total_route / self.total_time}")
+    #     self.get_logger().info(f"Have run {self.total_node} nodes")
 
     def get_best_cmd(self, distance, angle_diff):
         #Get best v and w ... using self.param.params
@@ -209,25 +226,6 @@ class turtle_node(Node):
 
         return v, w
 
-    def mainloop(self):
-        if self.total_node > 0 and self.total_node % 4 == 0 and not self.havePrint:
-            self.havePrint = True
-            lap_time = time.time() - self.lap_start_time
-            self.training_data.append((self.param.current_paramList.copy(), lap_time))
-            
-            if len(self.training_data) > 5:
-                self.brain.train_network(self.training_data)
-                self.optimize_parameters() 
-            
-            self.lap_start_time = time.time()
-            self.print_status()
-        if self.total_node % 4 != 0:
-            self.havePrint = False
-
-        if hasattr(self, 'distance'):
-            v, m = self.get_best_cmd(self.distance, self.angle_diff)
-            self.send_cmd(v, m)
-
     def optimize_parameters(self):
         best_params = None
         best_predicted_time = float('inf')
@@ -242,6 +240,28 @@ class turtle_node(Node):
         
         if best_params is not None:
             self.param.update_params(best_params)
+
+    def mainloop(self):
+        if self.total_node > 0 and self.total_node % 4 == 0 and not self.havePrint:
+            self.havePrint = True
+            lap_time = time.time() - self.lap_start_time
+            self.get_logger().info(f"完成一圈，用时: {lap_time:.2f}秒")
+            self.training_data.append((self.param.current_paramList.copy(), lap_time))
+            
+            if len(self.training_data) > 5:
+                self.get_logger().info("=== 网络训练结果 ===")
+                avg_loss = self.brain.train_network(self.training_data, self.get_logger())
+                self.get_logger().info("=== 参数优化 ===")
+                self.optimize_parameters()
+
+            self.lap_start_time = time.time()
+            # self.print_status()
+        if self.total_node % 4 != 0:
+            self.havePrint = False
+
+        if hasattr(self, 'distance'):
+            v, m = self.get_best_cmd(self.distance, self.angle_diff)
+            self.send_cmd(v, m)
     
 def main():
     rclpy.init()
