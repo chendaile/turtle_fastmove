@@ -187,7 +187,6 @@ class turtle_node(Node):
         self.angle_diff = angle_diff
 
         if self.distance < self.distance_thres:
-            # self.get_logger().info(f"Successfully reach {self.des_point_pos}")
             self.duty_index = (self.duty_index + 1) % len(self.duty)
             self.total_node += 1
 
@@ -199,16 +198,8 @@ class turtle_node(Node):
         msg.linear.x = float(v)
         msg.angular.z = float(w)
         self.cmd_sender.publish(msg)
-    
-    # def print_status(self):
-    #     self.get_logger().info(f"Total route: {self.total_route}")
-    #     self.get_logger().info(f"Total time: {self.total_time}")
-    #     self.get_logger().info(f"Average total velocity: {self.total_route / self.total_time}")
-    #     self.get_logger().info(f"Have run {self.total_node} nodes")
 
     def get_best_cmd(self, distance, angle_diff):
-        #Get best v and w ... using self.param.params
-        
         # 角度控制
         if abs(angle_diff) > self.param.params['angle_threshold']:
             # 需要转向
@@ -255,7 +246,6 @@ class turtle_node(Node):
                 self.optimize_parameters()
 
             self.lap_start_time = time.time()
-            # self.print_status()
         if self.total_node % 4 != 0:
             self.havePrint = False
 
