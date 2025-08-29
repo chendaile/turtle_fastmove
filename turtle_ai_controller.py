@@ -44,12 +44,14 @@ class optimized_para():
         self.current_paramList = np.array(list(self.params.values()))
 
     def update_params(self, param_updates):
-        for param_name, update in param_updates.items():
-            if param_name in self.params:
-                new_value = self.params[param_name] + update
-                # 限制在边界内
-                min_val, max_val = self.param_bounds[param_name]
-                self.params[param_name] = np.clip(new_value, min_val, max_val)
+        if isinstance(param_updates, dict):    
+            for param_name, update in param_updates.items():
+                min_val, max_val = self.params_range[param_name]
+                self.params[param_name] = np.clip(update, min_val, max_val)
+        elif isinstance(param_updates, np.ndarray):
+            for i, param_name in enumerate(self.params.keys()):
+                min_val, max_val = self.params_range[param_name]
+                self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
 
     def generate_candidate_params(self):
         current = self.current_paramList
