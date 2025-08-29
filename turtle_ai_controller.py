@@ -173,17 +173,16 @@ class network():
         
         for params, lap_time in data[-5:]:
             predicted = self.forward(params)
-            # loss = self.backward(np.array([lap_time]))
-            loss = abs(predicted[0]-lap_time)
+            loss = self.backward(np.array([lap_time]))
             total_loss += loss
             sample_count += 1
             
             if logger:
-                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{loss:.1f}s")
+                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
         
         avg_loss = total_loss / sample_count if sample_count > 0 else 0
         if logger:
-            logger.info(f"平均训练损失: {avg_loss:.1f}s")
+            logger.info(f"平均训练损失: {avg_loss:.3f}")
         
         return avg_loss
     
