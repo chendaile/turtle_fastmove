@@ -6,42 +6,23 @@ from geometry_msgs.msg import Twist
 from turtlesim.msg import Pose
 import numpy as np
 import json
+import argparse
 
 class optimized_para():
-    def __init__(self):
-        self.params = {
-            'angle_threshold': 0.1,          # 角度阈值
-            'turn_speed': 3.0,               # 转向速度
-            'speed_angle_factor': 2.0,       # 转向时速度衰减因子
-            'min_turn_speed': 0.2,           # 转向时最小速度
-            
-            # 微调参数
-            'fine_tune_gain': 2.0,           # 微调增益
-            
-            # 距离控制参数
-            'speed_distance_factor': 1.5,    # 速度-距离系数
-            'max_speed': 3.0,                # 最大速度
-            
-            # 减速参数
-            'slow_distance': 0.5,            # 开始减速的距离
-            'slow_factor': 0.3,              # 减速系数
-        }
+    def __init__(self, route_name, contine_bool=False):
+        self.best_param_path = 'output/best_params_' + route_name + '.json'
+        if not contine_bool:
+            with open('config/init_arg.json', 'r') as f:
+                config = json.load(f)
+            self.params = config["params"]
+        else:
+            with open(self.best_param_path, 'r') as f:
+                config = json.load(f)
+            self.params = config["best_params"]
 
-        self.params_range = {
-            'angle_threshold': (0.02, 1),          
-            'turn_speed': (1, 10),               
-            'speed_angle_factor': (0.5, 5.0),       
-            'min_turn_speed': (0.01, 1),           
-            
-            'fine_tune_gain': (0.05, 5.0),           
-            
-            'speed_distance_factor': (0.5, 5),    
-            'max_speed': (1, 5.0),                
-            
-            'slow_distance': (0.1, 5),            
-            'slow_factor': (0.1, 3),              
-        }
-
+        with open('config/init_arg.json', 'r') as f:
+            config = json.load(f)
+        self.params_range = config["params_range"]
         self.current_paramList = np.array(list(self.params.values()))
 
     def save_best_params(self, lap_time):
@@ -49,18 +30,16 @@ class optimized_para():
             'best_time': lap_time,
             'best_params': self.params.copy()
         }
-    
         try:
-            with open('best_params.json', 'r') as f:
+            with open(self.best_param_path, 'r') as f:
                 old_data = json.load(f)
             if lap_time >= old_data['best_time']:
                 return False 
         except:
             pass
         
-        with open('best_params.json', 'w') as f:
+        with open(self.best_param_path, 'w') as f:
             json.dump(save_data, f, indent=2)
-        
         return True 
     
     def update_params(self, param_updates):
@@ -179,17 +158,11 @@ class network():
             
             if logger:
                 logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
-        
-        avg_loss = total_loss / sample_count if sample_count > 0 else 0
-        if logger:
-            logger.info(f"平均训练损失: {avg_loss:.3f}")
-        
-        return avg_loss
     
 class turtle_node(Node):
-    def __init__(self):
+    def __init__(self, continue_bool, route_name):
         super().__init__('turtle1')
-        self.param = optimized_para()
+        self.param = optimized_para(route_name, continue_bool)
         self.brain = network()
         self.get_logger().info("Start turtle node!")
 
@@ -200,11 +173,14 @@ class turtle_node(Node):
             Twist, '/turtle1/cmd_vel', 10
         )
 
-        self.duty = {0:(2, 2), 
-                     1:(9, 2), 
-                     2:(9, 9), 
-                     3:(2, 9)}
+        with open("config/routes.json", 'r') as f:
+            routes = json.load(f)
+        self.duty = routes["routes"][route_name]
+        description = routes["route_descriptions"][route_name]
+        self.get_logger().info(description)
+
         self.duty_index = 0
+        self.len_route = len(self.duty)
 
         self.distance_thres = 0.3
         self.total_route = 0
@@ -222,7 +198,7 @@ class turtle_node(Node):
             add_route = sqrt((pose.x - self.pos.x)**2 + (pose.y - self.pos.y)**2)
             self.total_route += add_route
 
-        self.des_point_pos = self.duty[self.duty_index]
+        self.des_point_pos = self.duty[str(self.duty_index)]
         gap_x, gap_y = self.des_point_pos[0] - pose.x, self.des_point_pos[1] - pose.y 
         self.distance = sqrt(gap_x**2 + gap_y**2)
 
@@ -269,40 +245,36 @@ class turtle_node(Node):
         best_params = None
         best_predicted_time = float('inf')
         
-        for i in range(10): 
+        for i in range(20): 
             candidate_params = self.param.generate_candidate_params()
             predicted_time = self.brain.forward(candidate_params)[0]
             
             if predicted_time < best_predicted_time:
                 best_predicted_time = predicted_time
                 best_params = candidate_params
+
+        old_params = self.param.update_params(best_params)
+        self.get_logger().info(f"优化完成! 预测改进时间: {best_predicted_time:.2f}秒")
         
-        if best_params is not None:
-            old_params = self.param.update_params(best_params)
+        param_names = list(self.param.params.keys())
+        self.get_logger().info("参数变化详情:")
+        
+        for name in param_names:
+            old_val = old_params[name]
+            new_val = self.param.params[name]
+            change = new_val - old_val
+            change_pct = (change / old_val * 100) if old_val != 0 else 0
             
-            self.get_logger().info(f"优化完成! 预测改进时间: {best_predicted_time:.2f}秒")
-            
-            param_names = list(self.param.params.keys())
-            self.get_logger().info("参数变化详情:")
-            
-            for name in param_names:
-                old_val = old_params[name]
-                new_val = self.param.params[name]
-                change = new_val - old_val
-                change_pct = (change / old_val * 100) if old_val != 0 else 0
-                
-                if abs(change) > 0.01: 
-                    self.get_logger().info(f"  {name}: {old_val:.3f} → {new_val:.3f} "
-                                        f"(变化: {change:+.3f}, {change_pct:+.1f}%)")
-        else:
-            self.get_logger().info("未找到更好的参数组合")
+            if abs(change) > 0.01: 
+                self.get_logger().info(f"  {name}: {old_val:.3f} → {new_val:.3f} "
+                                    f"(变化: {change:+.3f}, {change_pct:+.1f}%)")
 
     def mainloop(self):
         if self.total_node == 0 and not self.haveStart:
             self.haveStart = True
             self.lap_start_time = time.time()
             
-        if self.total_node > 0 and self.total_node % 4 == 0 and not self.havePrint:
+        if self.total_node > 0 and self.total_node % self.len_route == 0 and not self.havePrint:
             self.havePrint = True
             lap_time = time.time() - self.lap_start_time
             self.lap_start_time = time.time()
@@ -312,15 +284,18 @@ class turtle_node(Node):
             
             if len(self.training_data) > 5:
                 self.get_logger().info("=== 网络训练结果 ===")
-                avg_loss = self.brain.train_network(self.training_data, self.get_logger())
+                self.brain.train_network(self.training_data, self.get_logger())
                 self.get_logger().info("=== 参数优化 ===")
                 self.optimize_parameters()
-        if self.total_node % 4 != 0:
+        if self.total_node % self.len_route != 0:
             self.havePrint = False
 
         if hasattr(self, 'distance'):
             v, m = self.get_best_cmd(self.distance, self.angle_diff)
             self.send_cmd(v, m)
+
+        if hasattr(self, 'lap_start_time') and time.time() - self.lap_start_time > 30:
+            self.duty_index = (self.duty_index + 1) % len(self.duty)
 
         try:
             if self.param.save_best_params(lap_time):
@@ -330,7 +305,18 @@ class turtle_node(Node):
 
 def main():
     rclpy.init()
-    turtlesim = turtle_node()
+    parser = argparse.ArgumentParser(description='Please select the required turtle running parameters')
+    parser.add_argument("--contin", '-u', action='store_true', 
+                        default=False, help='Whether to continue from a given params')
+    parser.add_argument("--route", '-r', default="simple",
+                        help="The turtle's route among simple, figure_eight, spiral," \
+                        "star, complex_polygon, s_curve, maze, diamond, triangle, zigzag")
+
+    args = parser.parse_args()
+    continue_bool = args.contin
+    route_name = args.route
+
+    turtlesim = turtle_node(continue_bool, route_name)
 
     try:
         rclpy.spin(turtlesim)
