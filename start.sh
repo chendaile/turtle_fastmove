@@ -2,7 +2,7 @@
 
 # 启动turtlesim
 echo "启动 turtlesim..."
-ros2 run turtlesim turtlesim_node --ros-args -p width:=1800 -p height:=1600 --log-level ERROR &
+ros2 run turtlesim turtlesim_node --ros-args -p width:=1800 -p height:=1600 --log-level ERROR 2>/dev/null &
 sleep 2
 
 # 选择路线
