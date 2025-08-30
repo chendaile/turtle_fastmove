@@ -1,81 +1,83 @@
 import numpy as np
 import random
 
-class network():
-    def __init__(self):
-        # 改进网络结构：9 -> 16 -> 12 -> 8 -> 1 (增加层数和宽度)
-        self.input_size = 9
-        self.hidden1_size = 16
-        self.hidden2_size = 12  
-        self.hidden3_size = 8
-        self.output_size = 1
-
-        # 使用Xavier初始化，比随机初始化更好
-        self.w1 = np.random.randn(self.input_size, self.hidden1_size) * np.sqrt(2.0/self.input_size)
-        self.b1 = np.zeros(self.hidden1_size)
+class network:
+    def __init__(self, layers=[9, 16, 12, 8, 1], activation='relu', learning_rate=0.01):
+        self.layers = layers
+        self.activation = activation
+        self.learning_rate = learning_rate
         
-        self.w2 = np.random.randn(self.hidden1_size, self.hidden2_size) * np.sqrt(2.0/self.hidden1_size)
-        self.b2 = np.zeros(self.hidden2_size)
+        # 初始化权重和偏置
+        self.weights = []
+        self.biases = []
         
-        self.w3 = np.random.randn(self.hidden2_size, self.hidden3_size) * np.sqrt(2.0/self.hidden2_size)
-        self.b3 = np.zeros(self.hidden3_size)
+        for i in range(len(layers)-1):
+            w = np.random.randn(layers[i], layers[i+1]) * np.sqrt(2.0/layers[i])
+            b = np.zeros(layers[i+1])
+            self.weights.append(w)
+            self.biases.append(b)
         
-        self.w4 = np.random.randn(self.hidden3_size, self.output_size) * np.sqrt(2.0/self.hidden3_size)
-        self.b4 = np.zeros(self.output_size)
-
-        self.learning_rate = 0.01
-
-    def relu(self, x):
-        return np.maximum(0, x)
+        # 存储前向传播的值
+        self.activations = []
+        self.z_values = []
     
-    def relu_derivative(self, x):
-        return (x > 0).astype(float)
+    def activate(self, x):
+        if self.activation == 'relu':
+            return np.maximum(0, x)
+        elif self.activation == 'tanh':
+            return np.tanh(x)
+        elif self.activation == 'sigmoid':
+            return 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+        return x
     
-    def forward(self, input_data: np.ndarray):
-        self.input_data = input_data
-        
-        self.z1 = input_data @ self.w1 + self.b1
-        self.a1 = self.relu(self.z1)
-        
-        self.z2 = self.a1 @ self.w2 + self.b2
-        self.a2 = self.relu(self.z2)
-        
-        self.z3 = self.a2 @ self.w3 + self.b3
-        self.a3 = self.relu(self.z3)
-        
-        self.z4 = self.a3 @ self.w4 + self.b4
-        self.output = self.z4  # 直接线性输出
-
-        return self.output
+    def activate_derivative(self, x):
+        if self.activation == 'relu':
+            return (x > 0).astype(float)
+        elif self.activation == 'tanh':
+            return 1 - np.tanh(x) ** 2
+        elif self.activation == 'sigmoid':
+            s = self.activate(x)
+            return s * (1 - s)
+        return np.ones_like(x)
     
-    def backward(self, target_output: np.ndarray):
+    def forward(self, input_data):
+        self.activations = [input_data]
+        self.z_values = []
+        
+        current = input_data
+        for i in range(len(self.weights)):
+            z = current @ self.weights[i] + self.biases[i]
+            self.z_values.append(z)
+            
+            if i < len(self.weights) - 1:  # 隐藏层用激活函数
+                current = self.activate(z)
+            else:  # 输出层线性
+                current = z  # 保持原来的线性输出
+            
+            self.activations.append(current)
+        
+        return current
+    
+    def backward(self, target_output):
         # 输出层误差
-        output_error = self.output - target_output
-        delta4 = output_error  # 线性输出，导数为1
+        output_error = self.activations[-1] - target_output
+        delta = output_error
         
-        error3 = delta4 @ self.w4.T
-        delta3 = error3 * self.relu_derivative(self.z3)
+        # 反向传播
+        for i in range(len(self.weights)-1, -1, -1):
+            # 更新权重和偏置
+            grad_w = np.outer(self.activations[i], delta)
+            grad_b = delta
+            
+            self.weights[i] -= self.learning_rate * grad_w
+            self.biases[i] -= self.learning_rate * grad_b
+            
+            # 计算下一层的误差（除了第一层）
+            if i > 0:
+                error = delta @ self.weights[i].T
+                delta = error * self.activate_derivative(self.z_values[i-1])
         
-        error2 = delta3 @ self.w3.T
-        delta2 = error2 * self.relu_derivative(self.z2)
-        
-        error1 = delta2 @ self.w2.T
-        delta1 = error1 * self.relu_derivative(self.z1)
-        
-        self.w4 -= self.learning_rate * np.outer(self.a3, delta4)
-        self.b4 -= self.learning_rate * delta4
-        
-        self.w3 -= self.learning_rate * np.outer(self.a2, delta3)
-        self.b3 -= self.learning_rate * delta3
-        
-        self.w2 -= self.learning_rate * np.outer(self.a1, delta2)
-        self.b2 -= self.learning_rate * delta2
-        
-        self.w1 -= self.learning_rate * np.outer(self.input_data, delta1)
-        self.b1 -= self.learning_rate * delta1
-
-        loss = float(output_error[0] ** 2)
-        return loss
+        return float(output_error[0] ** 2)
 
     def train_network(self, data, logger=None):
         total_loss = 0
@@ -89,6 +91,6 @@ class network():
             total_loss += loss
             sample_count += 1
             
-            if logger:
+            if logger and sample_count <= 5:  # 只显示前5个结果，避免日志过多
                 logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
     
