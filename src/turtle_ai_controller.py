@@ -33,7 +33,7 @@ class turtle_node(Node):
         self.duty_index = 0
         self.len_route = len(self.duty)
 
-        self.distance_thres = 0.3
+        self.distance_thres = 0.2
         self.total_route = 0
         self.total_node = -1
         self.start_time = time.time()
