@@ -82,6 +82,7 @@ class network:
     def train_network(self, data, logger=None):
         total_loss = 0
         sample_count = 0
+        diffs = []
         
         sample_size = min(30, len(data))
         sampled_data = random.sample(data, sample_size)
@@ -90,7 +91,11 @@ class network:
             loss = self.backward(np.array([lap_time]))
             total_loss += loss
             sample_count += 1
+            diff = abs(predicted[0]-lap_time)
+            diffs.append(diff)
             
-            if logger and sample_count <= 5:  # 只显示前5个结果，避免日志过多
-                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{abs(predicted[0]-lap_time):.1f}s")
+            if logger and sample_count <= 3:  # 只显示前5个结果，避免日志过多
+                logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{diff:.1f}s")
+        diffs = np.array(diffs)
+        logger.info(f"平均差异{np.mean(diffs)}s")
     
