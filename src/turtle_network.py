@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 class network:
-    def __init__(self, layers=[9, 16, 12, 8, 1], activation='relu', learning_rate=0.01):
+    def __init__(self, layers=[9, 8, 4, 1], activation='relu', learning_rate=0.005):
         self.layers = layers
         self.activation = activation
         self.learning_rate = learning_rate
@@ -12,7 +12,7 @@ class network:
         self.biases = []
         
         for i in range(len(layers)-1):
-            w = np.random.randn(layers[i], layers[i+1]) * np.sqrt(2.0/layers[i])
+            w = np.random.randn(layers[i], layers[i+1]) * 0.1
             b = np.zeros(layers[i+1])
             self.weights.append(w)
             self.biases.append(b)
@@ -97,5 +97,5 @@ class network:
             if logger and sample_count <= 3:  # 只显示前5个结果，避免日志过多
                 logger.info(f"预测:{predicted[0]:.1f}s, 实际:{lap_time:.1f}s, 误差:{diff:.1f}s")
         diffs = np.array(diffs)
-        logger.info(f"平均差异{np.mean(diffs)}s")
+        logger.info(f"平均差异: {np.mean(diffs):.2f}s")
     

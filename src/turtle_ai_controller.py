@@ -6,8 +6,9 @@ from geometry_msgs.msg import Twist
 from turtlesim.msg import Pose
 import json
 import argparse
-from turtle_network import network
+# from turtle_network import network
 from turtle_para import optimized_para
+from turtle_network_sci import network
 
 class turtle_node(Node):
     def __init__(self, continue_bool, route_name):
@@ -134,7 +135,7 @@ class turtle_node(Node):
             self.get_logger().info(f"完成一圈，用时: {lap_time:.2f}秒")
             self.training_data.append((self.param.current_paramList.copy(), lap_time))
             
-            if len(self.training_data) > 10:
+            if len(self.training_data) > 5:
                 self.get_logger().info("=== 网络训练结果 ===")
                 self.brain.train_network(self.training_data, self.get_logger())
                 self.get_logger().info("=== 参数优化 ===")
