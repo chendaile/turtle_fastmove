@@ -1,3 +1,4 @@
+import os
 import time
 from math import sqrt, atan2, pi
 import rclpy
@@ -39,6 +40,7 @@ class optimized_para():
         except:
             pass
         
+        os.makedirs("output", exist_ok=True)
         with open(self.best_param_path, 'w') as f:
             json.dump(save_data, f, indent=2)
         return True 
