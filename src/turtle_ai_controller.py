@@ -47,11 +47,13 @@ class turtle_node(Node):
 
     def callback_pose(self, pose):
         if hasattr(self, "pos"):
-            add_route = sqrt((pose.x - self.pos.x) ** 2 + (pose.y - self.pos.y) ** 2)
+            add_route = sqrt((pose.x - self.pos.x) ** 2 +
+                             (pose.y - self.pos.y) ** 2)
             self.total_route += add_route
 
         self.des_point_pos = self.duty[str(self.duty_index)]
-        gap_x, gap_y = self.des_point_pos[0] - pose.x, self.des_point_pos[1] - pose.y
+        gap_x, gap_y = self.des_point_pos[0] - \
+            pose.x, self.des_point_pos[1] - pose.y
         self.distance = sqrt(gap_x**2 + gap_y**2)
 
         self.gap_theta = atan2(gap_y, gap_x)
@@ -149,7 +151,8 @@ class turtle_node(Node):
             self.lap_start_time = time.time()
 
             self.get_logger().info(f"完成一圈，用时: {lap_time:.2f}秒")
-            self.training_data.append((self.param.current_paramList.copy(), lap_time))
+            self.training_data.append(
+                (self.param.current_paramList.copy(), lap_time))
 
             if len(self.training_data) > 5:
                 self.get_logger().info("=== 网络训练结果 ===")

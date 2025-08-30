@@ -105,7 +105,8 @@ class network:
             if not self.is_fitted:
                 # 第一次训练，拟合标准化器
                 X_scaled = self.scaler_X.fit_transform(X)
-                y_scaled = self.scaler_y.fit_transform(y.reshape(-1, 1)).flatten()
+                y_scaled = self.scaler_y.fit_transform(
+                    y.reshape(-1, 1)).flatten()
             else:
                 # 后续训练，使用已有的标准化器
                 X_scaled = self.scaler_X.transform(X)

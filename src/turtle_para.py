@@ -45,7 +45,8 @@ class optimized_para:
         elif isinstance(param_updates, np.ndarray):
             for i, param_name in enumerate(self.params.keys()):
                 min_val, max_val = self.params_range[param_name]
-                self.params[param_name] = np.clip(param_updates[i], min_val, max_val)
+                self.params[param_name] = np.clip(
+                    param_updates[i], min_val, max_val)
 
         self.current_paramList = np.array(list(self.params.values()))
 
