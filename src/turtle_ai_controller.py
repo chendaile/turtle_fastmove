@@ -150,7 +150,7 @@ class network():
         total_loss = 0
         sample_count = 0
         
-        for params, lap_time in data[-5:]:
+        for params, lap_time in data[-10:]:
             predicted = self.forward(params)
             loss = self.backward(np.array([lap_time]))
             total_loss += loss
@@ -189,6 +189,7 @@ class turtle_node(Node):
         self.training_data = []
         self.havePrint = False
         self.haveStart = False
+        self.haveFix = False
 
         self.create_timer(0.1, self.mainloop)
         self.get_logger().info("Start turtle main loop")
@@ -213,6 +214,7 @@ class turtle_node(Node):
         if self.distance < self.distance_thres:
             self.duty_index = (self.duty_index + 1) % len(self.duty)
             self.total_node += 1
+            self.haveFix = False
 
         self.pos = pose
         self.total_time = time.time() - self.start_time
@@ -282,7 +284,7 @@ class turtle_node(Node):
             self.get_logger().info(f"完成一圈，用时: {lap_time:.2f}秒")
             self.training_data.append((self.param.current_paramList.copy(), lap_time))
             
-            if len(self.training_data) > 5:
+            if len(self.training_data) > 10:
                 self.get_logger().info("=== 网络训练结果 ===")
                 self.brain.train_network(self.training_data, self.get_logger())
                 self.get_logger().info("=== 参数优化 ===")
@@ -294,8 +296,9 @@ class turtle_node(Node):
             v, m = self.get_best_cmd(self.distance, self.angle_diff)
             self.send_cmd(v, m)
 
-        if hasattr(self, 'lap_start_time') and time.time() - self.lap_start_time > 30:
+        if hasattr(self, 'lap_start_time') and time.time() - self.lap_start_time > 30 and not self.haveFix:
             self.duty_index = (self.duty_index + 1) % len(self.duty)
+            self.haveFix = True
 
         try:
             if self.param.save_best_params(lap_time):
