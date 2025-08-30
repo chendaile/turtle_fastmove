@@ -24,7 +24,7 @@ class turtle_node(Node):
             Twist, '/turtle1/cmd_vel', 10
         )
 
-        with open("config/routes.json", 'r') as f:
+        with open("config/routes_smooth.json", 'r') as f:
             routes = json.load(f)
         self.duty = routes["routes"][route_name]
         description = routes["route_descriptions"][route_name]
