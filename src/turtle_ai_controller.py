@@ -7,6 +7,7 @@ from turtlesim.msg import Pose
 import numpy as np
 import json
 import argparse
+import random
 
 class optimized_para():
     def __init__(self, route_name, contine_bool=False):
@@ -150,7 +151,9 @@ class network():
         total_loss = 0
         sample_count = 0
         
-        for params, lap_time in data[-10:]:
+        sample_size = min(30, len(data))
+        sampled_data = random.sample(data, sample_size)
+        for params, lap_time in sampled_data:
             predicted = self.forward(params)
             loss = self.backward(np.array([lap_time]))
             total_loss += loss
