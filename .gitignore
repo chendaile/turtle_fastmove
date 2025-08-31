@@ -3,3 +3,6 @@ __pycache__
 turtle_env
 /simulator
 .prettierrc
+package.json
+package-lock.json
+CLAUDE.md
